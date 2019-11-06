@@ -2,7 +2,7 @@
 #include <v1model.p4>
 
 // this structure is specific to the BMV2 target
-// and their semantics is well documented. 
+// The fields herein have a well documented semantics.
 // WARNING: do not add custom metadata here, the compiler
 // will reject them. Add them to meta_t instead
 struct intrinsic_metadata_t {
@@ -12,13 +12,13 @@ struct intrinsic_metadata_t {
     bit<32> lf_field_list;
 }
 
-//TODO: add metadata fields here
+//TODO: add custom metadata fields here
+//HINT: they must be of type bit<N> or (rarely) int<N>
 struct meta_t {
 	bit<32> dummy;
 }
 
-// ensures communication between 
-// nat and cpu
+// ensures communication between nat and cpu
 header cpu_header_t {
     bit<64> preamble;
     bit<8>  if_index;
@@ -81,6 +81,7 @@ struct headers {
     tcp_t        tcp;
 }
 
+// program entry point
 parser ParserImpl(packet_in packet, out headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
     @name(".parse_cpu_header") state parse_cpu_header {
         packet.extract(hdr.cpu_header);
@@ -116,11 +117,12 @@ parser ParserImpl(packet_in packet, out headers hdr, inout metadata meta, inout 
         }
     }
 }
-
+// ingress pipeline starts
 control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
     @name(".set_dmac") action set_dmac(bit<48> dmac) {
     }
     @name("._drop") action _drop() {
+        mark_to_drop(standard_metadata);
     }
     @name(".set_if_info") action set_if_info(bit<1> is_ext) {
     }
@@ -149,8 +151,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
             _drop;
         }
         key = {
-			// TODO: add key match here for ARP table
-			// ARP table maps IPv4 -> MAC
+			// TODO: add key match here for ARP table ARP table maps IPv4 -> MAC
 			// HINT: rewrite destination MAC address to 
 			// the one specified by ARP: that is 
 			// ethernet.dstAddr = ARP[ipv4.dst]
@@ -169,7 +170,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
 			// set a flag indicating whether the port
 			// is internal or external. 
 			// A source port may be invalid. If so,
-			// then drop the packet
+			// then drop the packet.
 			// HINT: need a metadata field which says
 			// what port the packet came in. Watch out for
 			// cpu => nat communication. What happens to a packet
@@ -223,6 +224,7 @@ control egress(inout headers hdr, inout metadata meta, inout standard_metadata_t
     @name(".do_rewrites") action do_rewrites(bit<48> smac) {
     }
     @name("._drop") action _drop() {
+        mark_to_drop(standard_metadata);
     }
     @name(".do_cpu_encap") action do_cpu_encap() {
     }
@@ -269,6 +271,7 @@ control DeparserImpl(packet_out packet, in headers hdr) {
 
 control verifyChecksum(inout headers hdr, inout metadata meta) {
     apply {
+        //TODO: uncomment these lines at the end
         //verify_checksum(true, { hdr.ipv4.version, hdr.ipv4.ihl, hdr.ipv4.diffserv, hdr.ipv4.totalLen, hdr.ipv4.identification, hdr.ipv4.flags, hdr.ipv4.fragOffset, hdr.ipv4.ttl, hdr.ipv4.protocol, hdr.ipv4.srcAddr, hdr.ipv4.dstAddr }, hdr.ipv4.hdrChecksum, HashAlgorithm.csum16);
         //verify_checksum_with_payload(hdr.tcp.isValid(), { hdr.ipv4.srcAddr, hdr.ipv4.dstAddr, 8w0, hdr.ipv4.protocol, meta.meta.tcpLength, hdr.tcp.srcPort, hdr.tcp.dstPort, hdr.tcp.seqNo, hdr.tcp.ackNo, hdr.tcp.dataOffset, hdr.tcp.res, hdr.tcp.flags, hdr.tcp.window, hdr.tcp.urgentPtr }, hdr.tcp.checksum, HashAlgorithm.csum16);
     }
@@ -276,6 +279,7 @@ control verifyChecksum(inout headers hdr, inout metadata meta) {
 
 control computeChecksum(inout headers hdr, inout metadata meta) {
     apply {
+        //TODO: uncomment these lines at the end
         //update_checksum(true, { hdr.ipv4.version, hdr.ipv4.ihl, hdr.ipv4.diffserv, hdr.ipv4.totalLen, hdr.ipv4.identification, hdr.ipv4.flags, hdr.ipv4.fragOffset, hdr.ipv4.ttl, hdr.ipv4.protocol, hdr.ipv4.srcAddr, hdr.ipv4.dstAddr }, hdr.ipv4.hdrChecksum, HashAlgorithm.csum16);
         //update_checksum_with_payload(hdr.tcp.isValid(), { hdr.ipv4.srcAddr, hdr.ipv4.dstAddr, 8w0, hdr.ipv4.protocol, meta.meta.tcpLength, hdr.tcp.srcPort, hdr.tcp.dstPort, hdr.tcp.seqNo, hdr.tcp.ackNo, hdr.tcp.dataOffset, hdr.tcp.res, hdr.tcp.flags, hdr.tcp.window, hdr.tcp.urgentPtr }, hdr.tcp.checksum, HashAlgorithm.csum16);
     }
