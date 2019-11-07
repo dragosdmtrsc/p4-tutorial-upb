@@ -182,8 +182,8 @@ def addNatEntry(ipsrc, tcpsrc, extip, tcpsrc_prime):
     standard_client.bm_mt_add_entry(
         0, table.name, keyparams, "nat_hit_int_to_ext", action_data
     )
-
-EXTERN_IP = "192.168.0.1"
+# stands for "192.168.0.1"
+EXTERN_IP = 0xc0a80001
 
 current_nat_port = 1025
 nat_mappings = {}
@@ -214,8 +214,9 @@ def process_cpu_pkt(p):
         print "Allocating external port", ext_port
         nat_mappings[(ip_hdr.src, tcp_hdr.sport)] = ext_port
         # TODO: internal to external rule for this mapping
-        addNatEntry(ip_hdr.src, tcp_hdr.sport, EXTERN_IP)
+        addNatEntry(ip_hdr.src, tcp_hdr.sport, EXTERN_IP, ext_port)
         # TODO: external to internal rule for this mapping
+        addRnatEntry(ip_hdr.src, tcp_hdr.sport, EXTERN_IP, ext_port)
     sendp(p_str, iface=args.cpuport, verbose=0)
 
 def main():
