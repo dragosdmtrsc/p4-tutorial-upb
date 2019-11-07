@@ -15,6 +15,9 @@ struct intrinsic_metadata_t {
 //TODO: add custom metadata fields here
 //HINT: they must be of type bit<N> or (rarely) int<N>
 struct meta_t {
+    // == 1w1 iff packet came in from internal port
+    bit<1> is_ext_if;
+    // dummy fields for demonstration purposes
 	bit<32> dummy;
 	bit<32> k1;
 	bit<32> k2;
@@ -141,6 +144,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
 
 
     @name(".set_dmac") action set_dmac(bit<48> dmac) {
+        hdr.ethernet.dstAddr = dmac;
     }
     @name("._drop") action _drop() {
         mark_to_drop(standard_metadata);
@@ -192,10 +196,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
 			// is internal or external. 
 			// A source port may be invalid. If so,
 			// then drop the packet.
-			// HINT: need a metadata field which says
-			// what port the packet came in. Watch out for
-			// cpu => nat communication. What happens to a packet
-			// re-injected in the pipeline
+			// HINT: standard_metadata.ingress_port -> meta.meta.is_ext_if
 			meta.meta.dummy : exact;
         }
     }
@@ -212,13 +213,27 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
         }
         size = 1024;
     }
+    @name(".rnat") table rnat {
+        actions = {
+            _drop;
+            nat_miss_ext_to_int;
+            nat_hit_ext_to_int;
+        }
+        key = {
+			// TODO: nat match keys here:
+			// HINT: this table just matches a connection 5-tuple
+			// and looks if the packet came in from an external
+			// or an internal interface
+			meta.meta.dummy : exact;
+        }
+        default_action = nat_miss_ext_to_int();
+        size = 128;
+    }
     @name(".nat") table nat {
         actions = {
             _drop;
-            nat_miss_int_to_ext;
-            nat_miss_ext_to_int;
             nat_hit_int_to_ext;
-            nat_hit_ext_to_int;
+            nat_miss_int_to_ext;
         }
         key = {
 			// TODO: nat match keys here:
@@ -227,15 +242,20 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
 			// or an internal interface
 			meta.meta.dummy : exact;
         }
+        default_action = nat_miss_int_to_ext();
         size = 128;
     }
     apply {
         T.apply();
         if_info.apply();
-        nat.apply();
+        if (meta.meta.is_ext_if == 1w1) {
+            rnat.apply();
+        } else {
+            nat.apply();
+        }
         if (true /* TODO: write condition to forward the packet: 
 			neither if_info nor nat has dropped it + 
-			ipv4 header is sane (?) */) {
+			ipv4 header is sane (?) HINT: check ipv4.ttl */) {
             ipv4_lpm.apply();
             forward.apply();
         }
