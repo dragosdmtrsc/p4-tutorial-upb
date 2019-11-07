@@ -102,6 +102,86 @@ def addTEntryForAct1(k1, k2value, k2mask, k3value, k3prefix, p1, p2, prio):
         BmAddEntryOptions(priority=prio)
     )
 
+def addRnatEntry(ipsrc, tcpsrc, extip, tcpsrc_prime):
+    keyparams = []
+    table = get_table('rnat')
+    #0: make valids
+    key = runtime_CLI.bytes_to_string(i2bytes(1, 1))
+    ipvalid = BmMatchParam(type=BmMatchParamType.EXACT,
+                         exact=BmMatchParamExact(key))
+    keyparams.append(ipvalid)
+
+    key = runtime_CLI.bytes_to_string(i2bytes(1, 1))
+    tcpvalid = BmMatchParam(type=BmMatchParamType.EXACT,
+                           exact=BmMatchParamExact(key))
+    keyparams.append(tcpvalid)
+
+    bitwidths = [bw for (_, _, bw) in table.key]
+    # 1: encode k1
+    k1bw = bitwidths[2]
+    key = runtime_CLI.bytes_to_string(i2bytes(extip, k1bw))
+    param = BmMatchParam(type=BmMatchParamType.EXACT,
+                         exact=BmMatchParamExact(key))
+    keyparams.append(param)
+
+    # 2: encode k2
+    k2bw = bitwidths[3]
+    key = runtime_CLI.bytes_to_string(i2bytes(tcpsrc_prime, k2bw))
+    param = BmMatchParam(type=BmMatchParamType.EXACT,
+                         ternary=BmMatchParamExact(key))
+    keyparams.append(param)
+
+    # encode action param p1
+    action_data = []
+    bwp1 = 32
+    action_data += [runtime_CLI.bytes_to_string(i2bytes(ipsrc, bwp1))]
+    # encode action param p2
+    bwp2 = 16
+    action_data += [runtime_CLI.bytes_to_string(i2bytes(tcpsrc, bwp2))]
+    global standard_client
+    standard_client.bm_mt_add_entry(
+        0, table.name, keyparams, "nat_hit_ext_to_int", action_data
+    )
+def addNatEntry(ipsrc, tcpsrc, extip, tcpsrc_prime):
+    keyparams = []
+    table = get_table('nat')
+    #0: make valids
+    key = runtime_CLI.bytes_to_string(i2bytes(1, 1))
+    ipvalid = BmMatchParam(type=BmMatchParamType.EXACT,
+                         exact=BmMatchParamExact(key))
+    keyparams.append(ipvalid)
+
+    key = runtime_CLI.bytes_to_string(i2bytes(1, 1))
+    tcpvalid = BmMatchParam(type=BmMatchParamType.EXACT,
+                           exact=BmMatchParamExact(key))
+    keyparams.append(tcpvalid)
+
+    bitwidths = [bw for (_, _, bw) in table.key]
+    # 1: encode k1
+    k1bw = bitwidths[2]
+    key = runtime_CLI.bytes_to_string(i2bytes(ipsrc, k1bw))
+    param = BmMatchParam(type=BmMatchParamType.EXACT,
+                         exact=BmMatchParamExact(key))
+    keyparams.append(param)
+
+    # 2: encode k2
+    k2bw = bitwidths[3]
+    key = runtime_CLI.bytes_to_string(i2bytes(tcpsrc, k2bw))
+    param = BmMatchParam(type=BmMatchParamType.EXACT,
+                         ternary=BmMatchParamExact(key))
+    keyparams.append(param)
+
+    # encode action param p1
+    action_data = []
+    bwp1 = 32
+    action_data += [runtime_CLI.bytes_to_string(i2bytes(extip, bwp1))]
+    # encode action param p2
+    bwp2 = 16
+    action_data += [runtime_CLI.bytes_to_string(i2bytes(tcpsrc_prime, bwp2))]
+    global standard_client
+    standard_client.bm_mt_add_entry(
+        0, table.name, keyparams, "nat_hit_int_to_ext", action_data
+    )
 
 EXTERN_IP = "192.168.0.1"
 
@@ -134,6 +214,7 @@ def process_cpu_pkt(p):
         print "Allocating external port", ext_port
         nat_mappings[(ip_hdr.src, tcp_hdr.sport)] = ext_port
         # TODO: internal to external rule for this mapping
+        addNatEntry(ip_hdr.src, tcp_hdr.sport, EXTERN_IP)
         # TODO: external to internal rule for this mapping
     sendp(p_str, iface=args.cpuport, verbose=0)
 
