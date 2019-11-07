@@ -16,6 +16,9 @@ struct intrinsic_metadata_t {
 //HINT: they must be of type bit<N> or (rarely) int<N>
 struct meta_t {
 	bit<32> dummy;
+	bit<32> k1;
+	bit<32> k2;
+	bit<32> k3;
 }
 
 // ensures communication between nat and cpu
@@ -119,6 +122,24 @@ parser ParserImpl(packet_in packet, out headers hdr, inout metadata meta, inout 
 }
 // ingress pipeline starts
 control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
+    @name(".a1") action a1(bit<32> p1, bit<16> p2) {
+        #dummy action to demonstrate control plane usage
+    }
+    @name(".a2") action a2() {}
+    @name(".T") table T {
+        key = {
+            meta.meta.k1 : exact;
+            meta.meta.k2 : ternary;
+            meta.meta.k3 : lpm;
+        }
+        actions = {
+            a1(); a2();
+        }
+        size = 1024;
+        default_action = a2;
+    }
+
+
     @name(".set_dmac") action set_dmac(bit<48> dmac) {
     }
     @name("._drop") action _drop() {
@@ -209,6 +230,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
         size = 128;
     }
     apply {
+        T.apply();
         if_info.apply();
         nat.apply();
         if (true /* TODO: write condition to forward the packet: 
